@@ -1,5 +1,5 @@
 # c-merger
-Takes a C file and merges all of the local included files into a single compilable file.
+Takes a C file and merges all of the local included files into a single compilable file. It is useful if you do competitive programming and have to be able to submit a single file.
 
 The given source file was generated using the project itself.
 
@@ -40,3 +40,5 @@ This file does not actually do any parsing of the files it finds, aside from fin
 
 Some things that should be avoided:
 1. `#pragma once`
+
+Okay, that's it, happy merging!
