@@ -4,7 +4,7 @@ Takes a C file and merges all of the local included files into a single compilab
 The given source file was generated using the project itself.
 
 # Installation
-Build the file `merger.c` and then run it using the syntax:
+Build the file `merger.c`, with `gcc -O3 merger.c`, and then run it using the syntax:
 ```
 merger in.c out.c
 ```
