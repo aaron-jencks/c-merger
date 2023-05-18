@@ -1,4 +1,4 @@
-// Created by Aaron Jencks May 17th, 2023
+// Created by Aaron Jencks 5/18/2023
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,13 +11,40 @@
 #include <errno.h>
 #include <limits.h>
 
+#ifndef TYPES_H
+#define TYPES_H
+
+#include <stdint.h>
+#include <stddef.h>
+
+typedef union {
+  void* ptr;
+  char c;
+  int i;
+  float f;
+  double d;
+  int8_t i8;
+  uint8_t u8;
+  int16_t i16;
+  uint16_t u16;
+  int32_t i32;
+  uint32_t u32;
+  int64_t i64;
+  uint64_t u64;
+  size_t st;
+} variant_t;
+
+
+#endif
+
 #ifndef ARRAYLIST_H
 #define ARRAYLIST_H
 
 #include <stddef.h>
 
+
 typedef struct {
-  void** arr;
+  variant_t* arr;
   size_t capacity;
   size_t count;
 } arraylist_t;
@@ -26,9 +53,9 @@ arraylist_t create_arraylist(size_t capacity);
 
 void destroy_arraylist(arraylist_t arr);
 
-size_t arraylist_append(arraylist_t* arr, void* item);
+size_t arraylist_append(arraylist_t* arr, variant_t item);
 
-void* arraylist_pop(arraylist_t* arr);
+variant_t arraylist_pop(arraylist_t* arr);
 
 #endif
 #include <stdlib.h>
@@ -66,7 +93,7 @@ arraylist_t create_arraylist(size_t capacity) {
   arraylist_t result;
   result.count = 0;
   result.capacity = capacity;
-  result.arr = (void**)malloc(sizeof(void*) * capacity);
+  result.arr = (variant_t*)malloc(sizeof(variant_t) * capacity);
   handle_memory_error(result.arr);
   return result;
 }
@@ -75,18 +102,18 @@ void destroy_arraylist(arraylist_t arr) {
   free(arr.arr);
 }
 
-size_t arraylist_append(arraylist_t* arr, void* item) {
+size_t arraylist_append(arraylist_t* arr, variant_t item) {
   if(arr->count == arr->capacity) {
     arr->capacity <<= 1;
-    arr->arr = (void**)realloc(arr->arr, sizeof(void*) * arr->capacity);
+    arr->arr = (variant_t*)realloc(arr->arr, sizeof(variant_t) * arr->capacity);
     handle_memory_error(arr->arr);
   }
   arr->arr[arr->count] = item;
   return arr->count++;
 }
 
-void* arraylist_pop(arraylist_t* arr) {
-  if(!arr->count) return NULL;
+variant_t arraylist_pop(arraylist_t* arr) {
+  if(!arr->count) return (variant_t){0};
   return arr->arr[--arr->count];
 }
 
@@ -203,7 +230,7 @@ include_t create_include(file_t source, size_t start, size_t stop) {
 
 bool file_is_visited(file_t file) {
   for(size_t fi = 0; fi < visited_files.count; fi++) {
-    file_t tf = *(file_t*)visited_files.arr[fi];
+    file_t tf = *(file_t*)visited_files.arr[fi].ptr;
     if(!(strcmp(file.fname, tf.fname) || strcmp(file.dir, tf.dir))) {
       return true;
     }
@@ -215,7 +242,9 @@ void visit_file(file_t file) {
   file_t* fp = (file_t*)malloc(sizeof(file_t));
   handle_memory_error(fp);
   *fp = file;
-  arraylist_append(&visited_files, fp);
+  variant_t item;
+  item.ptr = fp;
+  arraylist_append(&visited_files, item);
 }
 
 arraylist_t find_file_includes(file_t file) {
@@ -247,14 +276,16 @@ arraylist_t find_file_includes(file_t file) {
         fname = memcpy(fname, file.contents+fstart, nlen);
         fname[nlen] = 0;
 
-        printf("Found an include for %s on line %d\n",
+        printf("Found an include for %s on line %d\n", 
           fname, line++);
 
         include_t* fp = (include_t*)malloc(sizeof(include_t));
         handle_memory_error(fp);
-        *fp = create_include(create_file(fname),
+        *fp = create_include(create_file(fname), 
           fstart-10, fend+1);
-        arraylist_append(&result, fp);
+        variant_t item;
+        item.ptr = fp;
+        arraylist_append(&result, item);
         free(fname);
 
         while(file.contents[ci++] != '\n');
@@ -283,7 +314,7 @@ arraylist_t find_file_includes(file_t file) {
 
 void move_to_dir(char* dir) {
   if(chdir(dir)) {
-    handle_error(errno,
+    handle_error(errno, 
       "changing to directory %s failed with code %d\n",
       dir, errno);
   }
@@ -295,10 +326,10 @@ typedef struct {
   size_t stop;
 } span_t;
 
-span_t* create_span_ptr_range(file_t file,
+span_t* create_span_ptr_range(file_t file, 
   size_t start, size_t stop) {
 
-  span_t* result =
+  span_t* result = 
     (span_t*)malloc(sizeof(span_t));
   handle_memory_error(result);
 
@@ -316,10 +347,11 @@ void create_merged_spans(arraylist_t* output, file_t current) {
 
   size_t parent_start = 0;
   for(size_t ni = 0; ni < includes.count; ni++) {
-    include_t* inc = (include_t*)includes.arr[ni];
-
-    arraylist_append(output, create_span_ptr_range(
-      current, parent_start, inc->start));
+    include_t* inc = (include_t*)includes.arr[ni].ptr;
+    
+    variant_t pspan;
+    pspan.ptr = create_span_ptr_range(current, parent_start, inc->start);
+    arraylist_append(output, pspan);
 
     if(file_is_visited(inc->source)) {
       parent_start = inc->stop;
@@ -339,8 +371,9 @@ void create_merged_spans(arraylist_t* output, file_t current) {
     free(inc);
   }
 
-  arraylist_append(output, create_span_ptr_range(
-    current, parent_start, current.clength));
+  variant_t pspan;
+  pspan.ptr = create_span_ptr_range(current, parent_start, current.clength);
+  arraylist_append(output, pspan);
 
   destroy_arraylist(includes);
 }
@@ -365,14 +398,14 @@ int main(int argc, char* argv[]) {
   create_merged_spans(&output, start);
 
   while(visited_files.count) {
-    free(arraylist_pop(&visited_files));
+    free(arraylist_pop(&visited_files).ptr);
   }
   destroy_arraylist(visited_files);
 
   printf("Writing output to %s\n", argv[2]);
 
   for(size_t oi = 0; oi < output.count; oi++) {
-    span_t* span = (span_t*)output.arr[oi];
+    span_t* span = (span_t*)output.arr[oi].ptr;
     display_span(*span);
     for(size_t offset = span->start; offset < span->stop; offset++) {
       fputc(span->file.contents[offset], ofp);
