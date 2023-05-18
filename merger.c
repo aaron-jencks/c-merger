@@ -353,6 +353,7 @@ int main(int argc, char* argv[]) {
   if(argc != 3) {
     // incorrect usage given
     printf("merger\nMerges multiple C files into one\nUsage: merger main out\nfile\tA C file with a main() to merge #include's into\nout\tThe output filename to put all of the merged files into\n");
+    return 0;
   }
   visited_files = create_arraylist(10);
 
